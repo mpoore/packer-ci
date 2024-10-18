@@ -19,7 +19,6 @@ default:
 
 before_script:
   - cat /etc/hosts
-  - docker info
 
 build:
   stage: build

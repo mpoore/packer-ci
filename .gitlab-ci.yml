@@ -16,7 +16,7 @@ default:
   image: docker:24.0.5
   services:
     - name: docker:24.0.5-dind
-      command: command: ["--tls=false"]
+      command: ["--tls=false"]
 
 before_script:
   - cat /etc/hosts

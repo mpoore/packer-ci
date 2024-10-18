@@ -12,8 +12,7 @@ tdnf -y -q autoremove
 tdnf -q clean all
 EOF
 
-# Add version and plugin files
-ADD PLUGINS .
+# Add version file
 ADD VERSION .
 
 # Install Packer
@@ -21,15 +20,6 @@ FROM base AS packer
 ADD https://releases.hashicorp.com/packer/$VERSION/packer_${VERSION}_${TARGETOS}_${TARGETARCH}.zip ./
 RUN unzip packer_${VERSION}_${TARGETOS}_${TARGETARCH}.zip -d /usr/local/bin
 
-# Install Plugins
+# Complete
 FROM base
 COPY --from=packer /usr/local/bin/packer /usr/local/bin/packer
-RUN <<EOF
-while IFS= read -r PLUGIN
-do
-  sleep 15
-  packer plugins install $PLUGIN
-done < PLUGINS
-EOF
-
-# Complete

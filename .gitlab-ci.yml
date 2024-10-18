@@ -19,13 +19,14 @@ default:
       command: ["--tls=false"]
 
 before_script:
-  - cat /etc/hosts
+  - docker info
 
 build:
   stage: build
   script:
+    - export VERSION=$(<VERSION)
     - docker build . -t packer-ci:$VERSION --platform=linux/amd64 --build-arg VERSION=$VERSION
     - docker tag packer-ci:$VERSION $DOCKERTARGET:$VERSION
     - docker tag packer-ci:$VERSION $DOCKERTARGET:latest
-    - echo $DOCKERPASS | docker login $DOCKERREGISTRY -u $DOCKERUSER
+    - echo $DOCKERPASS | docker login $DOCKERREGISTRY --username $DOCKERUSER --password-stdin
     - docker push $DOCKERTARGET:$VERSION

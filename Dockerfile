@@ -22,10 +22,11 @@ RUN unzip packer_${VERSION}_linux_amd64.zip -d /usr/local/bin
 
 # Install Plugins
 RUN <<EOF
+echo "Installing plugins for target OS: ${TARGETOS} and Architecture: $TARGETARCH"
 while IFS= read -r line
 do
-  echo "Downloading ${line}..."
   LATEST_RELEASE=$(curl -s https://api.github.com/repos/${line}/releases/latest | grep 'browser_download_url' | grep "${TARGETOS}_${TARGETARCH}" | cut -d '"' -f 4)
+  echo "Downloading from ${LATEST_RELEASE}..."
   curl -L "${LATEST_RELEASE}" -o "/tmp/plugin.zip"
   echo "Installing ${line}..."
   unzip -o "/tmp/plugin.zip" -d "${PACKER_PLUGIN_DIR}"

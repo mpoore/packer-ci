@@ -19,6 +19,7 @@ default:
       command: ["--tls=false"]
 
 before_script:
+  - ip link set dev eth0 mtu 1300
   - apk add -q git 
 
 build:

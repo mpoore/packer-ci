@@ -19,7 +19,8 @@ default:
       command: ["--tls=false"]
 
 before_script:
-  - docker info
+  - ls
+  - apk add git 
 
 build:
   stage: build

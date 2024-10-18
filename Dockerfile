@@ -5,7 +5,7 @@ LABEL version="$VERSION"
 
 # Update packages and install new ones
 RUN <<EOF
-tdnf install -y curl unzip git wget tar bindutils coreutils xorriso jq mkpasswd
+tdnf install -q -y curl unzip git wget tar bindutils coreutils xorriso jq mkpasswd
 tdnf autoremove -y
 tdnf clean all
 EOF

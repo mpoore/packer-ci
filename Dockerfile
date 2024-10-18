@@ -27,6 +27,7 @@ COPY --from=packer /usr/local/bin/packer /usr/local/bin/packer
 RUN <<EOF
 while IFS= read -r PLUGIN
 do
+  sleep 15
   packer plugins install $PLUGIN
 done < PLUGINS
 EOF

@@ -1,0 +1,27 @@
+workflow:
+  rules:
+    - if: $CI_COMMIT_MESSAGE =~ /See merge request/
+    - when: always
+
+variables:
+  FF_TIMESTAMPS: true
+  DOCKER_TLS_CERTDIR: "/certs"
+
+stages:
+  - build
+
+image: docker:27.3.1
+services:
+  - docker:27.3.1-dind
+
+before_script:
+  - docker info
+
+build:
+  stage: build
+  script:
+    - docker build . -t packer-ci:$VERSION --platform=linux/amd64 --build-arg VERSION=$VERSION
+    - docker tag packer-ci:$VERSION $DOCKERTARGET:$VERSION
+    - docker tag packer-ci:$VERSION $DOCKERTARGET:latest
+    - echo $DOCKERPASS | docker login $DOCKERREGISTRY -u $DOCKERUSER
+    - docker push $DOCKERTARGET:$VERSION

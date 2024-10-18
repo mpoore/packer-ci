@@ -19,13 +19,13 @@ default:
       command: ["--tls=false"]
 
 before_script:
-  - ls
-  - apk add git 
+  - apk add -q git 
 
 build:
   stage: build
   script:
-    - export VERSION=$(<VERSION)
+    - export VERSION=$(cat VERSION)
+    - echo "Building packer-ci image version $VERSION"
     - docker build . -t packer-ci:$VERSION --platform=linux/amd64 --build-arg VERSION=$VERSION
     - docker tag packer-ci:$VERSION $DOCKERTARGET:$VERSION
     - docker tag packer-ci:$VERSION $DOCKERTARGET:latest

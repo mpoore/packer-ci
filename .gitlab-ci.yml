@@ -16,7 +16,9 @@ default:
   image: docker:27.3.1
   services:
     - name: docker:27.3.1-dind
-      command: ["--tls=false", "--insecure-registry=$DOCKERREGISTRY"]
+      command: ["--tls=false"]
+      variables:
+        DOCKER_OPTS: "--insecure-registry=$DOCKERREGISTRY"
 
 before_script:
   - apk add -q git 

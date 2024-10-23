@@ -33,3 +33,4 @@ build:
     - docker tag packer-ci:$VERSION $DOCKERTARGET:latest
     - echo $DOCKERPASS | docker login $DOCKERREGISTRY --username $DOCKERUSER --password-stdin
     - docker push $DOCKERTARGET:$VERSION
+    - docker push $DOCKERTARGET:latest

@@ -27,7 +27,7 @@ RUN jq -c '.plugins[]' PLUGINS | while read i; do \
     name=$(echo $i | jq -r '.name'); \
     version=$(echo $i | jq -r '.version'); \
     wget ${ARTIFACTORY_URL}/${name}/${name}_${version}_${TARGETOS}_${TARGETARCH}.zip --no-check-certificate; \
-    unzip $name_${version}_${TARGETOS}_${TARGETARCH}.zip -d /usr/local/bin; \
+    unzip ${name}_${version}_${TARGETOS}_${TARGETARCH}.zip -d /usr/local/bin; \
 done
 
 # Complete

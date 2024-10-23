@@ -2,6 +2,7 @@ FROM photon:latest AS base
 ARG VERSION
 ARG TARGETOS
 ARG TARGETARCH
+ARG ARTIFACTORY_URL
 LABEL maintainer="mpoore.io"
 LABEL version="$VERSION"
 
@@ -14,12 +15,21 @@ EOF
 
 # Add version file
 ADD VERSION .
+ADD PLUGINS .
 
 # Install Packer
 FROM base AS packer
 ADD https://releases.hashicorp.com/packer/$VERSION/packer_${VERSION}_${TARGETOS}_${TARGETARCH}.zip ./
 RUN unzip packer_${VERSION}_${TARGETOS}_${TARGETARCH}.zip -d /usr/local/bin
 
+# Install Packer plugins from Artifactory
+RUN jq -c '.plugins[]' PLUGINS | while read i; do \
+    name=$(echo $i | jq -r '.name'); \
+    version=$(echo $i | jq -r '.version'); \
+    wget ${ARTIFACTORY_URL}/$name/$name_${version}_${TARGETOS}_${TARGETARCH}.zip; \
+    unzip $name_${version}_${TARGETOS}_${TARGETARCH}.zip -d /usr/local/bin; \
+done
+
 # Complete
 FROM base
-COPY --from=packer /usr/local/bin/packer /usr/local/bin/packer
+COPY --from=packer /usr/local/bin /usr/local/bin/

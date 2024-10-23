@@ -1,0 +1,16 @@
+{
+  "plugins": [
+    {
+      "name": "packer-plugin-vsphere",
+      "version": "1.4.2"
+    },
+    {
+      "name": "packer-plugin-windows-update",
+      "version": "0.16.8"
+    },
+    {
+      "name": "packer-plugin-salt",
+      "version": "0.1.2"
+    }
+  ]
+}

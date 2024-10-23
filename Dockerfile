@@ -20,14 +20,14 @@ ADD PLUGINS .
 # Install Packer
 FROM base AS packer
 ADD https://releases.hashicorp.com/packer/$VERSION/packer_${VERSION}_${TARGETOS}_${TARGETARCH}.zip ./
-RUN unzip packer_${VERSION}_${TARGETOS}_${TARGETARCH}.zip -d /usr/local/bin
+RUN unzip -o packer_${VERSION}_${TARGETOS}_${TARGETARCH}.zip -d /usr/local/bin
 
 # Install Packer plugins from Artifactory
 RUN jq -c '.plugins[]' PLUGINS | while read i; do \
     name=$(echo $i | jq -r '.name'); \
     version=$(echo $i | jq -r '.version'); \
     wget ${ARTIFACTORY_URL}/${name}/${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip --no-check-certificate; \
-    unzip ${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip -d /usr/local/bin; \
+    unzip -o ${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip -d /usr/local/bin; \
 done
 
 # Complete

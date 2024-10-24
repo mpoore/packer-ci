@@ -6,7 +6,7 @@ ARG TARGETARCH
 ARG ARTIFACTORY_URL
 ARG BUILDDATE
 
-LABEL org.opencontainers.image.base.name="registry.hub.docker.com/library/photon"
+LABEL org.opencontainers.image.base.name="docker.io/library/photon:latest"
 LABEL org.opencontainers.image.created="$BUILDDATE"
 LABEL org.opencontainers.image.authors="Michael Poore (https://mpoore.io)"
 LABEL org.opencontainers.image.url="https://github.com/mpoore/packer-ci"

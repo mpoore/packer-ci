@@ -44,3 +44,8 @@ build:
         docker tag packer-ci:$VERSION $DOCKERTARGET:latest
         docker push $DOCKERTARGET:latest
       fi
+  artifacts:
+    paths:
+      - Dockerfile
+      - PLUGINS
+      - VERSION

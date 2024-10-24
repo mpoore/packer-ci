@@ -1,10 +1,25 @@
 FROM photon:latest AS base
+
 ARG VERSION
 ARG TARGETOS
 ARG TARGETARCH
 ARG ARTIFACTORY_URL
-LABEL maintainer="mpoore.io"
-LABEL version="$VERSION"
+ARG BUILDDATE
+ARG PLUGINLABELS
+
+LABEL \
+    org.opencontainers.image.base.name="registry.hub.docker.com/library/photon"
+    org.opencontainers.image.created="$BUILDDATE"
+    org.opencontainers.image.authors="Michael Poore (https://mpoore.io)"
+    org.opencontainers.image.url="https://github.com/mpoore/packer-ci"
+    org.opencontainers.image.documentation="https://github.com/mpoore/packer-ci"
+    org.opencontainers.image.source="https://github.com/mpoore/packer-ci"
+    org.opencontainers.image.version="$VERSION"
+    org.opencontainers.image.vendor="mpoore.io"
+    org.opencontainers.image.licenses="Apache-2.0 AND BSL-1.1 AND MPL-2.0"
+    org.opencontainers.image.title="Packer Image Builder"
+    org.opencontainers.image.description="HashiCorp Packer packaged with some plugins, by mpoore.io"
+LABEL $PLUGINLABELS
 
 # Update packages and install new ones
 RUN <<EOF
@@ -13,7 +28,7 @@ tdnf -y -q autoremove
 tdnf -q clean all
 EOF
 
-# Add version file
+# Add version file and plugins file
 ADD VERSION .
 ADD PLUGINS .
 

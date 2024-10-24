@@ -1,7 +1,8 @@
 workflow:
   rules:
-    - if: $CI_COMMIT_MESSAGE =~ /See merge request/
-    - when: always
+    - if: $CI_COMMIT_REF_NAME == 'main' && $CI_COMMIT_MESSAGE =~ /See merge request/
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - when: never
 
 variables:
   FF_TIMESTAMPS: true
@@ -21,16 +22,25 @@ default:
         DOCKER_OPTS: "--insecure-registry=$DOCKERREGISTRY"
 
 before_script:
-  - apk add -q git 
+  - apk add -q git jq
 
 build:
   stage: build
   script:
-    - export VERSION=$(cat VERSION)
+    - export LATEST=$(jq -r '.latest' VERSION)
+    - export VERSION=$(jq -r '.version' VERSION)
+    - export BUILDDATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+    - echo $(jq -r '.plugins[] | "LABEL io.mpoore.packer-ci.plugin.\(.name)=\"\(.version)\""' PLUGINS | paste -sd '\n') >> Dockerfile
     - echo "Building packer-ci image version $VERSION"
-    - docker build . -t packer-ci:$VERSION --platform=linux/amd64 --build-arg VERSION=$VERSION --build-arg ARTIFACTORY_URL=$ARTIFACTORY_URL
-    - docker tag packer-ci:$VERSION $DOCKERTARGET:$VERSION
-    - docker tag packer-ci:$VERSION $DOCKERTARGET:latest
-    - echo $DOCKERPASS | docker login $DOCKERREGISTRY --username $DOCKERUSER --password-stdin
-    - docker push $DOCKERTARGET:$VERSION
-    - docker push $DOCKERTARGET:latest
+    - docker build . -t packer-ci:$VERSION --platform=linux/amd64 --build-arg VERSION=$VERSION --build-arg ARTIFACTORY_URL=$ARTIFACTORY_URL --build-arg BUILDDATE=$BUILDDATE
+    - |
+      if [ $CI_COMMIT_REF_NAME == 'main' ]; then
+        echo $DOCKERPASS | docker login $DOCKERREGISTRY --username $DOCKERUSER --password-stdin
+        docker tag packer-ci:$VERSION $DOCKERTARGET:$VERSION
+        docker push $DOCKERTARGET:$VERSION
+      fi
+    - |
+      if [ $LATEST == "true" ] && [ $CI_COMMIT_REF_NAME == 'main' ]; then
+        docker tag packer-ci:$VERSION $DOCKERTARGET:latest
+        docker push $DOCKERTARGET:latest
+      fi

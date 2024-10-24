@@ -1,10 +1,22 @@
 FROM photon:latest AS base
+
 ARG VERSION
 ARG TARGETOS
 ARG TARGETARCH
 ARG ARTIFACTORY_URL
-LABEL maintainer="mpoore.io"
-LABEL version="$VERSION"
+ARG BUILDDATE
+
+LABEL org.opencontainers.image.base.name="registry.hub.docker.com/library/photon"
+LABEL org.opencontainers.image.created="$BUILDDATE"
+LABEL org.opencontainers.image.authors="Michael Poore (https://mpoore.io)"
+LABEL org.opencontainers.image.url="https://github.com/mpoore/packer-ci"
+LABEL org.opencontainers.image.documentation="https://github.com/mpoore/packer-ci"
+LABEL org.opencontainers.image.source="https://github.com/mpoore/packer-ci"
+LABEL org.opencontainers.image.version="$VERSION"
+LABEL org.opencontainers.image.vendor="mpoore.io"
+LABEL org.opencontainers.image.licenses="Apache-2.0 AND BSL-1.1 AND MPL-2.0"
+LABEL org.opencontainers.image.title="Packer Image Builder"
+LABEL org.opencontainers.image.description="HashiCorp Packer packaged with some plugins, by mpoore.io."
 
 # Update packages and install new ones
 RUN <<EOF
@@ -13,7 +25,7 @@ tdnf -y -q autoremove
 tdnf -q clean all
 EOF
 
-# Add version file
+# Add version file and plugins file
 ADD VERSION .
 ADD PLUGINS .
 
@@ -30,6 +42,8 @@ RUN jq -c '.plugins[]' PLUGINS | while read i; do \
     unzip -o ${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip -d /usr/local/bin; \
 done
 
-# Complete
+# Copy binary files for Packer and plugins
 FROM base
 COPY --from=packer /usr/local/bin /usr/local/bin/
+
+# Append labels for plugins

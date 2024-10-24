@@ -30,7 +30,7 @@ build:
     - export LATEST=$(jq -r '.latest' VERSION)
     - export VERSION=$(jq -r '.version' VERSION)
     - export BUILDDATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-    - echo $(jq -r '.plugins[] | "\\nLABEL io.mpoore.packer-ci.plugin.\(.name)=\"\(.version)\""' PLUGINS) >> Dockerfile
+    - echo $(jq -r '.plugins[] | "\nLABEL io.mpoore.packer-ci.plugin.\(.name)=\"\(.version)\""' PLUGINS) >> Dockerfile
     - echo "Building packer-ci image version $VERSION"
     - docker build . -t packer-ci:$VERSION --platform=linux/amd64 --build-arg VERSION=$VERSION --build-arg ARTIFACTORY_URL=$ARTIFACTORY_URL --build-arg BUILDDATE=$BUILDDATE
     - |

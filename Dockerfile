@@ -19,7 +19,7 @@ LABEL \
     org.opencontainers.image.licenses="Apache-2.0 AND BSL-1.1 AND MPL-2.0"
     org.opencontainers.image.title="Packer Image Builder"
     org.opencontainers.image.description="HashiCorp Packer packaged with some plugins, by mpoore.io"
-LABEL "$PLUGINLABELS"
+LABEL $PLUGINLABELS
 
 # Update packages and install new ones
 RUN <<EOF

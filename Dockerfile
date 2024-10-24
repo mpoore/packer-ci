@@ -41,7 +41,7 @@ RUN unzip -o packer_${VERSION}_${TARGETOS}_${TARGETARCH}.zip -d /usr/local/bin
 RUN jq -c '.plugins[]' PLUGINS | while read i; do \
     name=$(echo $i | jq -r '.name'); \
     version=$(echo $i | jq -r '.version'); \
-    wget ${ARTIFACTORY_URL}/${name}/${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip --no-check-certificate; \
+    wget -q ${ARTIFACTORY_URL}/${name}/${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip --no-check-certificate; \
     unzip -o ${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip -d /usr/local/bin; \
 done
 

@@ -30,10 +30,9 @@ build:
     - export LATEST=$(jq -r '.latest' VERSION)
     - export VERSION=$(jq -r '.version' VERSION)
     - export BUILDDATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-    - export PLUGINLABELS=$(jq -r '.plugins[] | "io.mpoore.packer-ci.plugin.\(.name)=\"\(.version)\""' PLUGINS | paste -sd ' ')
-    - echo "Plugin labels - $PLUGINLABELS"
+    - echo $(jq -r '.plugins[] | "LABEL io.mpoore.packer-ci.plugin.\(.name)=\"\(.version)\""' PLUGINS | paste -sd '\n') >> Dockerfile
     - echo "Building packer-ci image version $VERSION"
-    - docker build . -t packer-ci:$VERSION --platform=linux/amd64 --build-arg VERSION=$VERSION --build-arg ARTIFACTORY_URL=$ARTIFACTORY_URL --build-arg PLUGINLABELS="$PLUGINLABELS" --build-arg BUILDDATE=$BUILDDATE
+    - docker build . -t packer-ci:$VERSION --platform=linux/amd64 --build-arg VERSION=$VERSION --build-arg ARTIFACTORY_URL=$ARTIFACTORY_URL --build-arg BUILDDATE=$BUILDDATE
     - |
       if [ $CI_COMMIT_REF_NAME == 'main' ]; then
         echo $DOCKERPASS | docker login $DOCKERREGISTRY --username $DOCKERUSER --password-stdin

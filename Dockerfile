@@ -5,7 +5,6 @@ ARG TARGETOS
 ARG TARGETARCH
 ARG ARTIFACTORY_URL
 ARG BUILDDATE
-ARG PLUGINLABELS
 
 LABEL \
     org.opencontainers.image.base.name="registry.hub.docker.com/library/photon"
@@ -19,7 +18,6 @@ LABEL \
     org.opencontainers.image.licenses="Apache-2.0 AND BSL-1.1 AND MPL-2.0"
     org.opencontainers.image.title="Packer Image Builder"
     org.opencontainers.image.description="HashiCorp Packer packaged with some plugins, by mpoore.io"
-LABEL $PLUGINLABELS
 
 # Update packages and install new ones
 RUN <<EOF
@@ -45,6 +43,8 @@ RUN jq -c '.plugins[]' PLUGINS | while read i; do \
     unzip -o ${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip -d /usr/local/bin; \
 done
 
-# Complete
+# Copy binary files for Packer and plugins
 FROM base
 COPY --from=packer /usr/local/bin /usr/local/bin/
+
+# Append labels for plugins

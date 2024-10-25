@@ -1,6 +1,6 @@
 ARG LOCALREGISTRY
 
-FROM ${LOCALREGISTRY}photon:latest AS base
+FROM photon:latest AS base
 
 ARG VERSION
 ARG TARGETOS

@@ -14,14 +14,15 @@ stages:
   - build
 
 default:
-  image: docker:27.3.1
+  image: ${LOCALREGISTRY}docker:27.3.1
   services:
-    - name: docker:27.3.1-dind
+    - name: ${LOCALREGISTRY}docker:27.3.1-dind
       command: ["--tls=false"]
       variables:
         DOCKER_OPTS: "--insecure-registry=$DOCKERREGISTRY"
 
 before_script:
+  - unset DOCKER_HOST
   - apk add -q git jq
 
 build:

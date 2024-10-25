@@ -1,3 +1,5 @@
+ARG LOCALREGISTRY
+
 FROM photon:latest AS base
 
 ARG VERSION

@@ -2,15 +2,13 @@
   "plugins": [
     {
       "name":     "packer-plugin-vsphere",
-      "version":  "v1.4.2"
-    },
-    {
-      "name":     "packer-plugin-windows-update",
-      "version":  "v0.16.8"
+      "version":  "v2.2.0",
+      "source":   "https://github.com/vmware/packer-plugin-vsphere"
     },
     {
       "name":     "packer-plugin-salt",
-      "version":  "v0.1.2"
+      "version":  "v0.5.7",
+      "source":   "https://github.com/mpoore/packer-plugin-salt"
     }
   ]
 }

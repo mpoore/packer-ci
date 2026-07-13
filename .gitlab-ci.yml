@@ -9,20 +9,25 @@ variables:
   DOCKER_HOST: tcp://docker:2375
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
+  PLATFORMS: "linux/amd64,linux/arm64"
 
 stages:
   - build
 
 default:
-  image: docker:27.3.1
+  image: docker:29.6.1
   services:
-    - name: docker:27.3.1-dind
+    - name: docker:29.6.1-dind
       command: ["--tls=false"]
       variables:
         DOCKER_OPTS: "--insecure-registry=$DOCKERREGISTRY"
 
 before_script:
   - apk add -q git jq
+  # Register QEMU emulators so buildx can build non-native architectures on this runner
+  - docker run --rm --privileged tonistiigi/binfmt --install all
+  - docker buildx create --name packerci --driver docker-container --use
+  - docker buildx inspect --bootstrap
 
 build:
   stage: build
@@ -31,18 +36,18 @@ build:
     - export VERSION=$(jq -r '.version' VERSION)
     - export BUILDDATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
     - jq -r '.plugins[] | "LABEL io.mpoore.packer-ci.plugin.\(.name)=\"\(.version)\""' PLUGINS >> Dockerfile
-    - echo "Building packer-ci image version $VERSION"
-    - docker build . -t packer-ci:$VERSION --platform=linux/amd64 --build-arg VERSION=$VERSION --build-arg ARTIFACTORY_URL=$ARTIFACTORY_URL --build-arg BUILDDATE=$BUILDDATE --build-arg LOCALREGISTRY=$LOCALREGISTRY
+    - echo "Building packer-ci image version $VERSION for platforms $PLATFORMS"
+    - BUILD_ARGS="--build-arg VERSION=$VERSION --build-arg BUILDDATE=$BUILDDATE --build-arg LOCALREGISTRY=$LOCALREGISTRY"
     - |
-      if [ $CI_COMMIT_REF_NAME == 'main' ]; then
-        echo $DOCKERPASS | docker login $DOCKERREGISTRY --username $DOCKERUSER --password-stdin
-        docker tag packer-ci:$VERSION $DOCKERTARGET:$VERSION
-        docker push $DOCKERTARGET:$VERSION
-      fi
-    - |
-      if [ $LATEST == "true" ] && [ $CI_COMMIT_REF_NAME == 'main' ]; then
-        docker tag packer-ci:$VERSION $DOCKERTARGET:latest
-        docker push $DOCKERTARGET:latest
+      if [ "$CI_COMMIT_REF_NAME" == "main" ]; then
+        echo "$DOCKERPASS" | docker login "$DOCKERREGISTRY" --username "$DOCKERUSER" --password-stdin
+        TAGS="-t $DOCKERTARGET:$VERSION"
+        if [ "$LATEST" == "true" ]; then
+          TAGS="$TAGS -t $DOCKERTARGET:latest"
+        fi
+        docker buildx build . --platform="$PLATFORMS" $BUILD_ARGS $TAGS --push
+      else
+        docker buildx build . --platform="$PLATFORMS" $BUILD_ARGS -t packer-ci:$VERSION
       fi
   artifacts:
     paths:

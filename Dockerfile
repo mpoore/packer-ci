@@ -40,7 +40,7 @@ RUN jq -c '.plugins[]' PLUGINS | while read i; do \
     name=$(echo $i | jq -r '.name'); \
     version=$(echo $i | jq -r '.version'); \
     source=$(echo $i | jq -r '.source'); \
-    wget -q ${source}/releases/download/${version}/${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip; \
+    wget -q --timeout=30 --tries=3 ${source}/releases/download/${version}/${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip; \
     unzip -o ${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip -d /usr/local/bin; \
 done
 

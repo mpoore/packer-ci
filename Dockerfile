@@ -21,7 +21,7 @@ LABEL org.opencontainers.image.description="HashiCorp Packer packaged with some 
 
 # Update packages and install new ones
 RUN <<EOF
-tdnf -y -q install unzip git wget tar bindutils coreutils xorriso jq mkpasswd
+tdnf -y -q install unzip git wget tar bindutils coreutils xorriso jq openssl
 tdnf -y -q autoremove
 tdnf -q clean all
 EOF

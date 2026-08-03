@@ -72,6 +72,17 @@ build-dev:
         DOCKER_OPTS: "--insecure-registry=$HARBOR_REGISTRY"
   script:
     - *prepare
+    # The docker-container buildx driver runs its own BuildKit container, which
+    # doesn't inherit the dind daemon's --insecure-registry setting, so it needs
+    # its own registry config to accept Harbor's untrusted certificate.
+    - docker buildx rm packerci || true
+    - |
+      cat <<EOF > /tmp/buildkitd.toml
+      [registry."$HARBOR_REGISTRY"]
+        insecure = true
+      EOF
+    - docker buildx create --name packerci --driver docker-container --buildkitd-config /tmp/buildkitd.toml --use
+    - docker buildx inspect --bootstrap
     - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
     - TAGS="-t $HARBOR_TARGET:$VERSION"
     - |

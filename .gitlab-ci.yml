@@ -23,6 +23,14 @@ default:
 
 before_script:
   - apk add -q git jq
+  # Wait for the dind service to be ready before using the Docker client against it
+  - |
+    for i in $(seq 1 30); do
+      docker info >/dev/null 2>&1 && break
+      echo "Waiting for Docker daemon..."
+      sleep 1
+    done
+  - docker info
   # Register QEMU emulators so buildx can build non-native architectures on this runner
   - docker run --rm --privileged tonistiigi/binfmt --install all
   - docker buildx create --name packerci --driver docker-container --use

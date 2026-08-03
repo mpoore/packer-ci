@@ -1,7 +1,8 @@
 workflow:
   rules:
-    - if: $CI_COMMIT_REF_NAME == 'main' && $CI_COMMIT_MESSAGE =~ /See merge request/
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "dev"
     - when: never
 
 variables:
@@ -15,12 +16,10 @@ stages:
   - build
 
 default:
-  image: docker:29.6.1
+  image: docker:latest
   services:
-    - name: docker:29.6.1-dind
+    - name: docker:dind
       command: ["--tls=false"]
-      variables:
-        DOCKER_OPTS: "--insecure-registry=$DOCKERREGISTRY"
 
 before_script:
   - apk add -q git jq
@@ -29,28 +28,63 @@ before_script:
   - docker buildx create --name packerci --driver docker-container --use
   - docker buildx inspect --bootstrap
 
-build:
+.prepare: &prepare
+  - export LATEST=$(jq -r '.latest' VERSION)
+  - export VERSION=$(jq -r '.version' VERSION)
+  - export BUILDDATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+  - jq -r '.plugins[] | "LABEL io.mpoore.packer-ci.plugin.\(.name)=\"\(.version)\""' PLUGINS >> Dockerfile
+  - echo "Building packer-ci image version $VERSION for platforms $PLATFORMS"
+  - BUILD_ARGS="--build-arg VERSION=$VERSION --build-arg BUILDDATE=$BUILDDATE --build-arg LOCALREGISTRY=$LOCALREGISTRY"
+
+.artifacts: &artifacts
+  paths:
+    - Dockerfile
+    - PLUGINS
+    - VERSION
+
+# Merge request pipelines: build for validation only, never push.
+build-mr:
   stage: build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
-    - export LATEST=$(jq -r '.latest' VERSION)
-    - export VERSION=$(jq -r '.version' VERSION)
-    - export BUILDDATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-    - jq -r '.plugins[] | "LABEL io.mpoore.packer-ci.plugin.\(.name)=\"\(.version)\""' PLUGINS >> Dockerfile
-    - echo "Building packer-ci image version $VERSION for platforms $PLATFORMS"
-    - BUILD_ARGS="--build-arg VERSION=$VERSION --build-arg BUILDDATE=$BUILDDATE --build-arg LOCALREGISTRY=$LOCALREGISTRY"
+    - *prepare
+    - docker buildx build . --platform="$PLATFORMS" $BUILD_ARGS -t packer-ci:$VERSION
+  artifacts: *artifacts
+
+# dev branch: push to the local Harbor instance.
+build-dev:
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == "dev"
+  services:
+    - name: docker:dind
+      command: ["--tls=false"]
+      variables:
+        DOCKER_OPTS: "--insecure-registry=$HARBOR_REGISTRY"
+  script:
+    - *prepare
+    - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
+    - TAGS="-t $HARBOR_TARGET:$VERSION"
     - |
-      if [ "$CI_COMMIT_REF_NAME" == "main" ]; then
-        echo "$DOCKERPASS" | docker login "$DOCKERREGISTRY" --username "$DOCKERUSER" --password-stdin
-        TAGS="-t $DOCKERTARGET:$VERSION"
-        if [ "$LATEST" == "true" ]; then
-          TAGS="$TAGS -t $DOCKERTARGET:latest"
-        fi
-        docker buildx build . --platform="$PLATFORMS" $BUILD_ARGS $TAGS --push
-      else
-        docker buildx build . --platform="$PLATFORMS" $BUILD_ARGS -t packer-ci:$VERSION
+      if [ "$LATEST" == "true" ]; then
+        TAGS="$TAGS -t $HARBOR_TARGET:latest"
       fi
-  artifacts:
-    paths:
-      - Dockerfile
-      - PLUGINS
-      - VERSION
+    - docker buildx build . --platform="$PLATFORMS" $BUILD_ARGS $TAGS --push
+  artifacts: *artifacts
+
+# main branch: push to the public Docker registry.
+build-main:
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    - *prepare
+    - echo "$DOCKER_PASSWORD" | docker login "$DOCKER_REGISTRY" --username "$DOCKER_USER" --password-stdin
+    - TAGS="-t $DOCKER_TARGET:$VERSION"
+    - |
+      if [ "$LATEST" == "true" ]; then
+        TAGS="$TAGS -t $DOCKER_TARGET:latest"
+      fi
+    - docker buildx build . --platform="$PLATFORMS" $BUILD_ARGS $TAGS --push
+  artifacts: *artifacts

@@ -67,9 +67,7 @@ build-dev:
     - if: $CI_COMMIT_BRANCH == "dev"
   services:
     - name: docker:dind
-      command: ["--tls=false"]
-      variables:
-        DOCKER_OPTS: "--insecure-registry=$HARBOR_REGISTRY"
+      command: ["--tls=false", "--insecure-registry=$HARBOR_REGISTRY"]
   script:
     - *prepare
     # The docker-container buildx driver runs its own BuildKit container, which

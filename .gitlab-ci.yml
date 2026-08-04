@@ -74,17 +74,18 @@ build-dev:
     # (a plain -v bind mount would resolve against the daemon's filesystem, not ours).
     - docker run --rm -e CACERT="$(cat "$HARBOR_CA_CERT")" -v /etc/docker/certs.d:/certs.d alpine sh -c "mkdir -p /certs.d/$HARBOR_REGISTRY && echo \"\$CACERT\" > /certs.d/$HARBOR_REGISTRY/ca.crt"
     # The docker-container buildx driver runs its own BuildKit container, which
-    # pushes directly and doesn't go through the dind daemon, so it needs the
-    # same CA trusted separately via its own buildkitd config. buildx reads the
-    # `ca` path client-side at create time and provisions the new container
-    # with it, so this points straight at the File-type variable's own path.
+    # pushes directly and doesn't go through the dind daemon. Per-registry `ca`
+    # config in buildkitd.toml covers the blob push itself, but BuildKit's
+    # separate OAuth token-fetch client doesn't honour it (a known gap between
+    # its registry client and its auth client) - so trust the CA system-wide
+    # inside that container instead, which covers both code paths at once.
     - docker buildx rm packerci || true
-    - |
-      cat <<EOF > /tmp/buildkitd.toml
-      [registry."$HARBOR_REGISTRY"]
-        ca = ["$HARBOR_CA_CERT"]
-      EOF
-    - docker buildx create --name packerci --driver docker-container --buildkitd-config /tmp/buildkitd.toml --use
+    - docker buildx create --name packerci --driver docker-container --use
+    - docker buildx inspect --bootstrap
+    - BUILDKIT_CONTAINER=$(docker ps --filter "name=buildx_buildkit_packerci" --format '{{.Names}}' | head -n1)
+    - docker cp "$HARBOR_CA_CERT" "$BUILDKIT_CONTAINER:/tmp/harbor-ca.crt"
+    - docker exec "$BUILDKIT_CONTAINER" sh -c "cat /tmp/harbor-ca.crt >> /etc/ssl/certs/ca-certificates.crt"
+    - docker restart "$BUILDKIT_CONTAINER"
     - docker buildx inspect --bootstrap
     - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
     - TAGS="-t $HARBOR_TARGET:$VERSION-dev"

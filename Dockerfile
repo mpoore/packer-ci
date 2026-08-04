@@ -48,7 +48,8 @@ RUN set -e; \
     source=$(echo $i | jq -r '.source'); \
     shortname=$(echo $name | sed 's/^packer-plugin-//'); \
     hostnamespace=$(echo $source | sed -e 's#https://##' -e "s#/${name}\$##"); \
-    wget -q --timeout=60 --tries=5 ${source}/releases/download/${version}/${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip; \
+    echo "Fetching ${name} ${version} for ${TARGETOS}/${TARGETARCH}..."; \
+    wget --timeout=60 --tries=5 ${source}/releases/download/${version}/${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip; \
     unzip -o ${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip -d /tmp/plugin-extract; \
     packer plugins install --path /tmp/plugin-extract/${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH} ${hostnamespace}/${shortname}; \
     done; \

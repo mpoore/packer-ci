@@ -83,8 +83,14 @@ build-dev:
     # daemon's certs.d dir (a plain -v bind mount would resolve against the
     # daemon's filesystem, not ours).
     - docker run --rm -e CACERT="$(cat "$HARBOR_CA_CERT")" -v /etc/docker/certs.d:/certs.d alpine sh -c "mkdir -p /certs.d/$HARBOR_REGISTRY && echo \"\$CACERT\" > /certs.d/$HARBOR_REGISTRY/ca.crt"
-    - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
+    # Build doesn't need registry auth at all (only pulls public alpine, plus
+    # curl downloads in the Dockerfile), so it runs before login. Login runs
+    # immediately before push rather than before the (20-60s+) build, to avoid
+    # leaving a pooled connection idle long enough for the load balancer to
+    # drop it before push reuses it - the suspected cause of the "timeout
+    # awaiting response headers" failures on the initiate-upload request.
     - docker build . $BUILD_ARGS -t "$HARBOR_TARGET:$VERSION-dev"
+    - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
     - retry docker push --quiet "$HARBOR_TARGET:$VERSION-dev"
     - |
       if [ "$LATEST" == "true" ]; then
@@ -100,8 +106,11 @@ build-main:
     - if: $CI_COMMIT_BRANCH == "main"
   script:
     - *prepare
-    - echo "$DOCKER_PASSWORD" | docker login "$DOCKER_REGISTRY" --username "$DOCKER_USER" --password-stdin
+    # Build before login, and login immediately before push - see build-dev for
+    # why (avoids an idle pooled connection getting dropped by the load
+    # balancer between login and push).
     - docker build . $BUILD_ARGS -t "$DOCKER_TARGET:$VERSION"
+    - echo "$DOCKER_PASSWORD" | docker login "$DOCKER_REGISTRY" --username "$DOCKER_USER" --password-stdin
     - retry docker push --quiet "$DOCKER_TARGET:$VERSION"
     - |
       if [ "$LATEST" == "true" ]; then

@@ -68,37 +68,46 @@ build-dev:
     - name: docker:dind
   script:
     - *prepare
-    # Trust Harbor's CA for `docker login`, which the dind daemon handles directly.
-    # $HARBOR_CA_CERT is a File-type CI/CD variable, so it's a path in this job's
-    # own filesystem; -e streams its content into the dind daemon's certs.d dir
-    # (a plain -v bind mount would resolve against the daemon's filesystem, not ours).
+    # BuildKit's docker-container driver never picks up custom CA trust (or even
+    # `insecure=true`) for its own OAuth token-fetch client when pushing directly
+    # via `--push` - a confirmed, still-open upstream gap (moby/buildkit#5576,
+    # #1055; docker/buildx#2008), tried five different ways. Falling back to the
+    # default driver to dodge it is also a dead end here: this dind daemon's
+    # containerd-snapshotter mode breaks QEMU cross-arch emulation entirely
+    # (confirmed - plain `docker run --platform` fails too). So: build each
+    # platform separately, `--load` it into the dind daemon's own local image
+    # store, and push/assemble the manifest with the classic docker CLI instead
+    # of buildx.
+    #
+    # `docker login`/`docker push` are proxied through the dind daemon, so they
+    # need the CA trusted in its certs.d directory. $HARBOR_CA_CERT is a
+    # File-type CI/CD variable, so it's a path in this job's own filesystem; -e
+    # streams its content into the dind daemon's certs.d dir (a plain -v bind
+    # mount would resolve against the daemon's filesystem, not ours).
     - docker run --rm -e CACERT="$(cat "$HARBOR_CA_CERT")" -v /etc/docker/certs.d:/certs.d alpine sh -c "mkdir -p /certs.d/$HARBOR_REGISTRY && echo \"\$CACERT\" > /certs.d/$HARBOR_REGISTRY/ca.crt"
-    # The docker-container buildx driver's separate BuildKit container never picks
-    # up custom CA trust for its OAuth token-fetch client, no matter how the CA is
-    # supplied - a confirmed, still-open upstream gap (moby/buildkit#5576, #1055;
-    # docker/buildx#2008): three different injection approaches all failed at the
-    # exact same step. Switching to the default driver to dodge this instead hit a
-    # dead end too: this dind daemon's containerd-snapshotter mode breaks QEMU
-    # cross-arch emulation entirely (confirmed - plain `docker run --platform`
-    # fails identically, so it's not BuildKit-specific). So: skip TLS verification
-    # for this one internal push target specifically, keeping the docker-container
-    # driver (multi-arch proven reliable) and the working CA trust above for
-    # `docker login`. Revisit once the upstream BuildKit bug is fixed.
-    - docker buildx rm packerci || true
-    - |
-      cat <<EOF > /tmp/buildkitd.toml
-      [registry."$HARBOR_REGISTRY"]
-        insecure = true
-      EOF
-    - docker buildx create --name packerci --driver docker-container --buildkitd-config /tmp/buildkitd.toml --use
-    - docker buildx inspect --bootstrap
+    # `docker manifest create`/`push`, unlike push/login, run entirely client-side
+    # in this job container rather than being proxied through the dind daemon
+    # (confirmed - it fails on DNS/TLS using this container's own network and
+    # trust store, not the daemon's), so the CA needs trusting here too.
+    - cp "$HARBOR_CA_CERT" /usr/local/share/ca-certificates/harbor-ca.crt
+    - update-ca-certificates
     - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
-    - TAGS="-t $HARBOR_TARGET:$VERSION-dev"
+    - TAG_BASE="$HARBOR_TARGET:$VERSION-dev"
+    - PLATFORM_TAGS=""
+    - |
+      for PLATFORM in $(echo "$PLATFORMS" | tr ',' ' '); do
+        ARCH=$(echo "$PLATFORM" | cut -d/ -f2)
+        docker buildx build . --platform="$PLATFORM" $BUILD_ARGS -t "${TAG_BASE}-${ARCH}" --load
+        docker push "${TAG_BASE}-${ARCH}"
+        PLATFORM_TAGS="$PLATFORM_TAGS ${TAG_BASE}-${ARCH}"
+      done
+    - docker manifest create "$TAG_BASE" $PLATFORM_TAGS
+    - docker manifest push "$TAG_BASE"
     - |
       if [ "$LATEST" == "true" ]; then
-        TAGS="$TAGS -t $HARBOR_TARGET:latest-dev"
+        docker manifest create "$HARBOR_TARGET:latest-dev" $PLATFORM_TAGS
+        docker manifest push "$HARBOR_TARGET:latest-dev"
       fi
-    - docker buildx build . --platform="$PLATFORMS" $BUILD_ARGS $TAGS --push
   artifacts: *artifacts
 
 # main branch: push to the public Docker registry.

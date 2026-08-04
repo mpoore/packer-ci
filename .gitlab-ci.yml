@@ -68,17 +68,25 @@ build-dev:
     - name: docker:dind
   script:
     - *prepare
+    # Trust Harbor's CA for `docker login`, which the dind daemon handles directly.
+    # $HARBOR_CA_CERT is a File-type CI/CD variable, so it's a path in this job's
+    # own filesystem; -e streams its content into the dind daemon's certs.d dir
+    # (a plain -v bind mount would resolve against the daemon's filesystem, not ours).
+    - docker run --rm -e CACERT="$(cat "$HARBOR_CA_CERT")" -v /etc/docker/certs.d:/certs.d alpine sh -c "mkdir -p /certs.d/$HARBOR_REGISTRY && echo \"\$CACERT\" > /certs.d/$HARBOR_REGISTRY/ca.crt"
     # The docker-container buildx driver runs its own BuildKit container, which
-    # doesn't inherit the dind daemon's --insecure-registry setting, so it needs
-    # its own registry config to accept Harbor's untrusted certificate.
+    # pushes directly and doesn't go through the dind daemon, so it needs the
+    # same CA trusted separately via its own buildkitd config.
     - docker buildx rm packerci || true
     - |
       cat <<EOF > /tmp/buildkitd.toml
       [registry."$HARBOR_REGISTRY"]
-        insecure = true
+        ca = ["/etc/buildkit/harbor-ca.crt"]
       EOF
     - docker buildx create --name packerci --driver docker-container --buildkitd-config /tmp/buildkitd.toml --use
     - docker buildx inspect --bootstrap
+    - BUILDKIT_CONTAINER=$(docker ps --filter "name=buildx_buildkit_packerci" --format '{{.Names}}' | head -n1)
+    - docker cp "$HARBOR_CA_CERT" "$BUILDKIT_CONTAINER:/etc/buildkit/harbor-ca.crt"
+    - docker restart "$BUILDKIT_CONTAINER"
     - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
     - TAGS="-t $HARBOR_TARGET:$VERSION-dev"
     - |

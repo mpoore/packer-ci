@@ -74,18 +74,21 @@ build-dev:
     # (a plain -v bind mount would resolve against the daemon's filesystem, not ours).
     - docker run --rm -e CACERT="$(cat "$HARBOR_CA_CERT")" -v /etc/docker/certs.d:/certs.d alpine sh -c "mkdir -p /certs.d/$HARBOR_REGISTRY && echo \"\$CACERT\" > /certs.d/$HARBOR_REGISTRY/ca.crt"
     # The docker-container buildx driver runs its own BuildKit container, which
-    # pushes directly and doesn't go through the dind daemon. Per-registry `ca`
-    # config in buildkitd.toml covers the blob push itself, but BuildKit's
-    # separate OAuth token-fetch client doesn't honour it (a known gap between
-    # its registry client and its auth client) - so trust the CA system-wide
-    # inside that container instead, which covers both code paths at once.
+    # pushes directly and doesn't go through the dind daemon. Neither buildkitd.toml's
+    # per-registry `ca` config nor a runtime-appended system trust store reliably
+    # covers BuildKit's separate OAuth token-fetch client - a known, still-open
+    # upstream gap (moby/buildkit#5576, #1055; docker/buildx#2008). The one
+    # consistently reliable fix is baking the CA into the BuildKit image itself.
     - docker buildx rm packerci || true
-    - docker buildx create --name packerci --driver docker-container --use
-    - docker buildx inspect --bootstrap
-    - BUILDKIT_CONTAINER=$(docker ps --filter "name=buildx_buildkit_packerci" --format '{{.Names}}' | head -n1)
-    - docker cp "$HARBOR_CA_CERT" "$BUILDKIT_CONTAINER:/tmp/harbor-ca.crt"
-    - docker exec "$BUILDKIT_CONTAINER" sh -c "cat /tmp/harbor-ca.crt >> /etc/ssl/certs/ca-certificates.crt"
-    - docker restart "$BUILDKIT_CONTAINER"
+    - cp "$HARBOR_CA_CERT" /tmp/harbor-ca.crt
+    - |
+      cat <<EOF > /tmp/Dockerfile.buildkit-ca
+      FROM moby/buildkit:buildx-stable-1
+      COPY harbor-ca.crt /usr/local/share/ca-certificates/harbor-ca.crt
+      RUN cat /usr/local/share/ca-certificates/harbor-ca.crt >> /etc/ssl/certs/ca-certificates.crt
+      EOF
+    - docker build -t buildkit-with-harbor-ca -f /tmp/Dockerfile.buildkit-ca /tmp
+    - docker buildx create --name packerci --driver docker-container --driver-opt image=buildkit-with-harbor-ca --use
     - docker buildx inspect --bootstrap
     - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
     - TAGS="-t $HARBOR_TARGET:$VERSION-dev"

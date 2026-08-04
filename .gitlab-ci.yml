@@ -68,11 +68,11 @@ build-dev:
     - docker run --rm -e CACERT="$(cat "$HARBOR_CA_CERT")" -v /etc/docker/certs.d:/certs.d alpine sh -c "mkdir -p /certs.d/$HARBOR_REGISTRY && echo \"\$CACERT\" > /certs.d/$HARBOR_REGISTRY/ca.crt"
     - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
     - docker build . $BUILD_ARGS -t "$HARBOR_TARGET:$VERSION-dev"
-    - docker push "$HARBOR_TARGET:$VERSION-dev"
+    - docker push --quiet "$HARBOR_TARGET:$VERSION-dev"
     - |
       if [ "$LATEST" == "true" ]; then
         docker tag "$HARBOR_TARGET:$VERSION-dev" "$HARBOR_TARGET:latest-dev"
-        docker push "$HARBOR_TARGET:latest-dev"
+        docker push --quiet "$HARBOR_TARGET:latest-dev"
       fi
   artifacts: *artifacts
 
@@ -85,10 +85,10 @@ build-main:
     - *prepare
     - echo "$DOCKER_PASSWORD" | docker login "$DOCKER_REGISTRY" --username "$DOCKER_USER" --password-stdin
     - docker build . $BUILD_ARGS -t "$DOCKER_TARGET:$VERSION"
-    - docker push "$DOCKER_TARGET:$VERSION"
+    - docker push --quiet "$DOCKER_TARGET:$VERSION"
     - |
       if [ "$LATEST" == "true" ]; then
         docker tag "$DOCKER_TARGET:$VERSION" "$DOCKER_TARGET:latest"
-        docker push "$DOCKER_TARGET:latest"
+        docker push --quiet "$DOCKER_TARGET:latest"
       fi
   artifacts: *artifacts

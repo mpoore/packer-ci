@@ -22,7 +22,7 @@ LABEL org.opencontainers.image.description="HashiCorp Packer packaged with some 
 # Update packages and install new ones
 RUN <<EOF
 apk update -q
-apk add -q --no-cache unzip git wget tar bind-tools coreutils xorriso jq openssl ca-certificates
+apk add -q --no-cache unzip git curl tar bind-tools coreutils xorriso jq openssl ca-certificates
 EOF
 
 # Add version file and plugins file
@@ -49,7 +49,7 @@ RUN set -e; \
     shortname=$(echo $name | sed 's/^packer-plugin-//'); \
     hostnamespace=$(echo $source | sed -e 's#https://##' -e "s#/${name}\$##"); \
     echo "Fetching ${name} ${version} for ${TARGETOS}/${TARGETARCH}..."; \
-    wget --timeout=60 --tries=5 ${source}/releases/download/${version}/${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip; \
+    curl -fL -sS --connect-timeout 15 --max-time 120 --retry 5 --retry-delay 5 -o ${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip ${source}/releases/download/${version}/${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip; \
     unzip -o ${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip -d /tmp/plugin-extract; \
     packer plugins install --path /tmp/plugin-extract/${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH} ${hostnamespace}/${shortname}; \
     done; \

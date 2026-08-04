@@ -64,8 +64,16 @@ build-dev:
   stage: build
   rules:
     - if: $CI_COMMIT_BRANCH == "dev"
+  variables:
+    # The pipeline-wide DOCKER_DRIVER=overlay2 forces the legacy graph driver,
+    # which conflicts with and crashes dockerd when combined with the containerd
+    # snapshotter feature flag below ("configured driver overlay2 not available").
+    # Clearing it lets containerd-snapshotter (this Docker version's own default)
+    # take over instead.
+    DOCKER_DRIVER: ""
   services:
     - name: docker:dind
+      command: ["--feature=containerd-snapshotter=true"]
   script:
     - *prepare
     # Trust Harbor's CA for `docker login`, which the dind daemon handles directly.
@@ -78,10 +86,10 @@ build-dev:
     # client - a confirmed, still-open upstream gap (moby/buildkit#5576, #1055;
     # docker/buildx#2008): three different injection approaches (buildkitd.toml
     # `ca`, a runtime-appended system trust store, and a custom image with the CA
-    # baked in) all failed at the exact same step. This dind daemon runs with the
-    # containerd snapshotter enabled, so the default "docker" buildx driver (no
-    # separate builder) supports multi-platform builds directly through the dind
-    # daemon's own built-in BuildKit, reusing the certs.d trust config set up above.
+    # baked in) all failed at the exact same step. With the containerd snapshotter
+    # enabled above, the default "docker" buildx driver (no separate builder)
+    # supports multi-platform builds directly through the dind daemon's own
+    # built-in BuildKit, reusing the certs.d trust config set up above.
     - docker buildx use default
     - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
     - TAGS="-t $HARBOR_TARGET:$VERSION-dev"

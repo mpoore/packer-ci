@@ -82,10 +82,10 @@ build-dev:
     - docker buildx create --name packerci --driver docker-container --buildkitd-config /tmp/buildkitd.toml --use
     - docker buildx inspect --bootstrap
     - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
-    - TAGS="-t $HARBOR_TARGET:$VERSION"
+    - TAGS="-t $HARBOR_TARGET:$VERSION-dev"
     - |
       if [ "$LATEST" == "true" ]; then
-        TAGS="$TAGS -t $HARBOR_TARGET:latest"
+        TAGS="$TAGS -t $HARBOR_TARGET:latest-dev"
       fi
     - docker buildx build . --platform="$PLATFORMS" $BUILD_ARGS $TAGS --push
   artifacts: *artifacts

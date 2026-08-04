@@ -91,6 +91,11 @@ build-dev:
     # supports multi-platform builds directly through the dind daemon's own
     # built-in BuildKit, reusing the certs.d trust config set up above.
     - docker buildx use default
+    # DIAGNOSTIC - remove once the arm64 "exec format error" is root-caused.
+    - echo "--- binfmt_misc arm64 registration ---"
+    - docker run --rm --privileged alpine cat /proc/sys/fs/binfmt_misc/qemu-aarch64 || true
+    - echo "--- plain docker run cross-arch sanity check (bypasses buildx/BuildKit entirely) ---"
+    - docker run --rm --platform=linux/arm64 alpine uname -m || true
     - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
     - TAGS="-t $HARBOR_TARGET:$VERSION-dev"
     - |

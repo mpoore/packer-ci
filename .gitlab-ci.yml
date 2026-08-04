@@ -64,16 +64,8 @@ build-dev:
   stage: build
   rules:
     - if: $CI_COMMIT_BRANCH == "dev"
-  variables:
-    # The pipeline-wide DOCKER_DRIVER=overlay2 forces the legacy graph driver,
-    # which conflicts with and crashes dockerd when combined with the containerd
-    # snapshotter feature flag below ("configured driver overlay2 not available").
-    # Clearing it lets containerd-snapshotter (this Docker version's own default)
-    # take over instead.
-    DOCKER_DRIVER: ""
   services:
     - name: docker:dind
-      command: ["--feature=containerd-snapshotter=true"]
   script:
     - *prepare
     # Trust Harbor's CA for `docker login`, which the dind daemon handles directly.
@@ -81,21 +73,25 @@ build-dev:
     # own filesystem; -e streams its content into the dind daemon's certs.d dir
     # (a plain -v bind mount would resolve against the daemon's filesystem, not ours).
     - docker run --rm -e CACERT="$(cat "$HARBOR_CA_CERT")" -v /etc/docker/certs.d:/certs.d alpine sh -c "mkdir -p /certs.d/$HARBOR_REGISTRY && echo \"\$CACERT\" > /certs.d/$HARBOR_REGISTRY/ca.crt"
-    # The docker-container buildx driver runs its own BuildKit container, which
-    # pushes directly and never picks up custom CA trust for its OAuth token-fetch
-    # client - a confirmed, still-open upstream gap (moby/buildkit#5576, #1055;
-    # docker/buildx#2008): three different injection approaches (buildkitd.toml
-    # `ca`, a runtime-appended system trust store, and a custom image with the CA
-    # baked in) all failed at the exact same step. With the containerd snapshotter
-    # enabled above, the default "docker" buildx driver (no separate builder)
-    # supports multi-platform builds directly through the dind daemon's own
-    # built-in BuildKit, reusing the certs.d trust config set up above.
-    - docker buildx use default
-    # DIAGNOSTIC - remove once the arm64 "exec format error" is root-caused.
-    - echo "--- binfmt_misc arm64 registration ---"
-    - docker run --rm --privileged alpine cat /proc/sys/fs/binfmt_misc/qemu-aarch64 || true
-    - echo "--- plain docker run cross-arch sanity check (bypasses buildx/BuildKit entirely) ---"
-    - docker run --rm --platform=linux/arm64 alpine uname -m || true
+    # The docker-container buildx driver's separate BuildKit container never picks
+    # up custom CA trust for its OAuth token-fetch client, no matter how the CA is
+    # supplied - a confirmed, still-open upstream gap (moby/buildkit#5576, #1055;
+    # docker/buildx#2008): three different injection approaches all failed at the
+    # exact same step. Switching to the default driver to dodge this instead hit a
+    # dead end too: this dind daemon's containerd-snapshotter mode breaks QEMU
+    # cross-arch emulation entirely (confirmed - plain `docker run --platform`
+    # fails identically, so it's not BuildKit-specific). So: skip TLS verification
+    # for this one internal push target specifically, keeping the docker-container
+    # driver (multi-arch proven reliable) and the working CA trust above for
+    # `docker login`. Revisit once the upstream BuildKit bug is fixed.
+    - docker buildx rm packerci || true
+    - |
+      cat <<EOF > /tmp/buildkitd.toml
+      [registry."$HARBOR_REGISTRY"]
+        insecure = true
+      EOF
+    - docker buildx create --name packerci --driver docker-container --buildkitd-config /tmp/buildkitd.toml --use
+    - docker buildx inspect --bootstrap
     - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
     - TAGS="-t $HARBOR_TARGET:$VERSION-dev"
     - |

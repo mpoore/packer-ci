@@ -74,22 +74,15 @@ build-dev:
     # (a plain -v bind mount would resolve against the daemon's filesystem, not ours).
     - docker run --rm -e CACERT="$(cat "$HARBOR_CA_CERT")" -v /etc/docker/certs.d:/certs.d alpine sh -c "mkdir -p /certs.d/$HARBOR_REGISTRY && echo \"\$CACERT\" > /certs.d/$HARBOR_REGISTRY/ca.crt"
     # The docker-container buildx driver runs its own BuildKit container, which
-    # pushes directly and doesn't go through the dind daemon. Neither buildkitd.toml's
-    # per-registry `ca` config nor a runtime-appended system trust store reliably
-    # covers BuildKit's separate OAuth token-fetch client - a known, still-open
-    # upstream gap (moby/buildkit#5576, #1055; docker/buildx#2008). The one
-    # consistently reliable fix is baking the CA into the BuildKit image itself.
-    - docker buildx rm packerci || true
-    - cp "$HARBOR_CA_CERT" /tmp/harbor-ca.crt
-    - |
-      cat <<EOF > /tmp/Dockerfile.buildkit-ca
-      FROM moby/buildkit:buildx-stable-1
-      COPY harbor-ca.crt /usr/local/share/ca-certificates/harbor-ca.crt
-      RUN cat /usr/local/share/ca-certificates/harbor-ca.crt >> /etc/ssl/certs/ca-certificates.crt
-      EOF
-    - docker build -t buildkit-with-harbor-ca -f /tmp/Dockerfile.buildkit-ca /tmp
-    - docker buildx create --name packerci --driver docker-container --driver-opt image=buildkit-with-harbor-ca --use
-    - docker buildx inspect --bootstrap
+    # pushes directly and never picks up custom CA trust for its OAuth token-fetch
+    # client - a confirmed, still-open upstream gap (moby/buildkit#5576, #1055;
+    # docker/buildx#2008): three different injection approaches (buildkitd.toml
+    # `ca`, a runtime-appended system trust store, and a custom image with the CA
+    # baked in) all failed at the exact same step. This dind daemon runs with the
+    # containerd snapshotter enabled, so the default "docker" buildx driver (no
+    # separate builder) supports multi-platform builds directly through the dind
+    # daemon's own built-in BuildKit, reusing the certs.d trust config set up above.
+    - docker buildx use default
     - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
     - TAGS="-t $HARBOR_TARGET:$VERSION-dev"
     - |

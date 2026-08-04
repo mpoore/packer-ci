@@ -1,13 +1,13 @@
 ARG LOCALREGISTRY
 
-FROM photon:latest AS base
+FROM alpine:latest AS base
 
 ARG VERSION
 ARG TARGETOS
 ARG TARGETARCH
 ARG BUILDDATE
 
-LABEL org.opencontainers.image.base.name="docker.io/library/photon:latest"
+LABEL org.opencontainers.image.base.name="docker.io/library/alpine:latest"
 LABEL org.opencontainers.image.created="$BUILDDATE"
 LABEL org.opencontainers.image.authors="Michael Poore (https://mpoore.io)"
 LABEL org.opencontainers.image.url="https://github.com/mpoore/packer-ci"
@@ -21,9 +21,8 @@ LABEL org.opencontainers.image.description="HashiCorp Packer packaged with some 
 
 # Update packages and install new ones
 RUN <<EOF
-tdnf -y -q install unzip git wget tar bindutils coreutils xorriso jq openssl
-tdnf -y -q autoremove
-tdnf -q clean all
+apk update
+apk add --no-cache unzip git wget tar bind-tools coreutils xorriso jq openssl ca-certificates
 EOF
 
 # Add version file and plugins file

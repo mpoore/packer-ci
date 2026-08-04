@@ -1,8 +1,8 @@
 # Packer CI 📦🚀
 
-**A lean, multi-arch container image that ships [HashiCorp Packer](https://www.packer.io/) pre-loaded with the plugins you actually need — ready to drop straight into your CI/CD pipelines.**
+**A lean container image that ships [HashiCorp Packer](https://www.packer.io/) pre-loaded with the plugins you actually need — ready to drop straight into your CI/CD pipelines.**
 
-Building machine images (VM templates, cloud images, containers) in CI shouldn't mean hand-rolling a Docker image every time you need a new Packer plugin. **Packer CI** does that work for you: it takes a minimal, security-conscious base image, installs Packer at a pinned version, and bakes in a curated set of plugins — all built and published automatically for both `amd64` and `arm64`.
+Building machine images (VM templates, cloud images, containers) in CI shouldn't mean hand-rolling a Docker image every time you need a new Packer plugin. **Packer CI** does that work for you: it takes a minimal, security-conscious base image, installs Packer at a pinned version, and bakes in a curated set of plugins — all built and published automatically.
 
 ---
 
@@ -10,8 +10,7 @@ Building machine images (VM templates, cloud images, containers) in CI shouldn't
 
 - **HashiCorp Packer**, pinned to an exact version (see [`VERSION`](VERSION)) — no surprises, no drift.
 - **Pre-installed plugins**, declared declaratively in [`PLUGINS`](PLUGINS) and downloaded straight from their source repositories at build time.
-- **A minimal footprint**, built on [Photon OS](https://vmware.github.io/photon/), VMware's security-hardened, container-optimized Linux distribution.
-- **Multi-architecture support** — every image is built for both `linux/amd64` and `linux/arm64` in a single pipeline run using Docker Buildx.
+- **A minimal footprint**, built on [Alpine Linux](https://alpinelinux.org/).
 - **Fully automated builds** via GitLab CI, including versioned tags and an optional `:latest` tag.
 
 ## 🔌 Included plugins
@@ -46,11 +45,11 @@ build-image:
 
 The [`Dockerfile`](Dockerfile) uses a multi-stage build:
 
-1. A `base` stage installs common tooling (`unzip`, `git`, `wget`, `jq`, etc.) on top of Photon OS.
+1. A `base` stage installs common tooling (`unzip`, `git`, `wget`, `jq`, etc.) on top of Alpine Linux.
 2. A `packer` stage downloads and unpacks the pinned Packer release, then loops over [`PLUGINS`](PLUGINS) to fetch and install each plugin binary for the target OS/architecture.
 3. A final stage copies just the resulting binaries into a clean image, keeping the final footprint small.
 
-The [`.gitlab-ci.yml`](.gitlab-ci.yml) pipeline drives the whole process: it reads the desired version from [`VERSION`](VERSION), appends plugin version labels to the Dockerfile, and builds/pushes multi-arch images with Buildx — tagging `:latest` automatically when flagged in `VERSION`.
+The [`.gitlab-ci.yml`](.gitlab-ci.yml) pipeline drives the whole process: it reads the desired version from [`VERSION`](VERSION), appends plugin version labels to the Dockerfile, and builds/pushes the image — tagging `:latest` automatically when flagged in `VERSION`.
 
 ### Bumping versions
 

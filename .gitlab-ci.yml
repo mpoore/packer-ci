@@ -45,6 +45,18 @@ before_script:
         n=$((n + 1))
       done
     }
+  # Signs an image digest with cosign. Keyless (Sigstore OIDC, via the
+  # SIGSTORE_ID_TOKEN id_token) by default; set $COSIGN_KEY (and
+  # $COSIGN_PASSWORD if it's encrypted) as a protected CI/CD variable to sign
+  # with a static key instead. The public Rekor transparency log is used
+  # unless $COSIGN_TLOG_UPLOAD is set to "false".
+  - |
+    cosign_sign() {
+      args="--yes"
+      [ -n "$COSIGN_KEY" ] && args="$args --key env://COSIGN_KEY"
+      [ "$COSIGN_TLOG_UPLOAD" = "false" ] && args="$args --tlog-upload=false"
+      cosign sign $args "$1"
+    }
 
 .prepare: &prepare
   - export LATEST=$(jq -r '.latest' VERSION)
@@ -52,13 +64,28 @@ before_script:
   - export BUILDDATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
   - jq -r '.plugins[] | "LABEL io.mpoore.packer-ci.plugin.\(.name)=\"\(.version)\""' PLUGINS >> Dockerfile
   - echo "Building packer-ci image version $VERSION"
-  - BUILD_ARGS="--build-arg VERSION=$VERSION --build-arg BUILDDATE=$BUILDDATE --build-arg LOCALREGISTRY=$LOCALREGISTRY"
+  # --provenance=false skips buildx's default build-provenance attestation,
+  # so the pushed image is a plain single manifest instead of a manifest
+  # index wrapping the image and an attestation manifest.
+  - BUILD_ARGS="--build-arg VERSION=$VERSION --build-arg BUILDDATE=$BUILDDATE --build-arg LOCALREGISTRY=$LOCALREGISTRY --provenance=false"
 
 .artifacts: &artifacts
   paths:
     - Dockerfile
     - PLUGINS
     - VERSION
+
+# Installs the cosign CLI (always the latest release) into the job container.
+.cosign_install: &cosign_install
+  - |
+    COSIGN_VERSION=$(curl -fsSL https://api.github.com/repos/sigstore/cosign/releases/latest | jq -r '.tag_name')
+    case "$(uname -m)" in
+      x86_64) COSIGN_ARCH=amd64 ;;
+      aarch64) COSIGN_ARCH=arm64 ;;
+      *) echo "Unsupported architecture for cosign: $(uname -m)" >&2; exit 1 ;;
+    esac
+    curl -fL --connect-timeout 15 --max-time 60 --retry 5 --retry-delay 5 -o /usr/local/bin/cosign "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-${COSIGN_ARCH}"
+    chmod +x /usr/local/bin/cosign
 
 # Merge request pipelines: build for validation only, never push.
 build-mr:
@@ -75,14 +102,21 @@ build-dev:
   stage: build
   rules:
     - if: $CI_COMMIT_BRANCH == "dev"
+  id_tokens:
+    SIGSTORE_ID_TOKEN:
+      aud: sigstore
   script:
     - *prepare
+    - *cosign_install
     # Trust Harbor's CA for `docker login`/`docker push`, which the dind daemon
     # handles directly. $HARBOR_CA_CERT is a File-type CI/CD variable, so it's a
     # path in this job's own filesystem; -e streams its content into the dind
     # daemon's certs.d dir (a plain -v bind mount would resolve against the
     # daemon's filesystem, not ours).
     - docker run --rm -e CACERT="$(cat "$HARBOR_CA_CERT")" -v /etc/docker/certs.d:/certs.d alpine sh -c "mkdir -p /certs.d/$HARBOR_REGISTRY && echo \"\$CACERT\" > /certs.d/$HARBOR_REGISTRY/ca.crt"
+    # cosign talks to the registry directly from this job container rather
+    # than through the dind daemon, so it needs the CA trusted here too.
+    - cat "$HARBOR_CA_CERT" >> /etc/ssl/certs/ca-certificates.crt
     # Build doesn't need registry auth at all (only pulls public alpine, plus
     # curl downloads in the Dockerfile), so it runs before login. Login runs
     # immediately before push rather than before the (20-60s+) build, to avoid
@@ -92,6 +126,13 @@ build-dev:
     - docker build . $BUILD_ARGS -t "$HARBOR_TARGET:$VERSION-dev"
     - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
     - retry docker push --quiet "$HARBOR_TARGET:$VERSION-dev"
+    # Sign the tag ref itself rather than a digest resolved via `docker
+    # inspect`: buildx's default provenance attestation makes the pushed
+    # image a manifest index, and the local daemon's RepoDigests can reflect
+    # the inner platform manifest rather than the index digest the tag
+    # actually resolves to in the registry. Passing the tag lets cosign
+    # resolve it against the registry directly, which is authoritative.
+    - cosign_sign "$HARBOR_TARGET:$VERSION-dev"
     - |
       if [ "$LATEST" == "true" ]; then
         docker tag "$HARBOR_TARGET:$VERSION-dev" "$HARBOR_TARGET:latest-dev"
@@ -104,14 +145,21 @@ build-main:
   stage: build
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
+  id_tokens:
+    SIGSTORE_ID_TOKEN:
+      aud: sigstore
   script:
     - *prepare
+    - *cosign_install
     # Build before login, and login immediately before push - see build-dev for
     # why (avoids an idle pooled connection getting dropped by the load
     # balancer between login and push).
     - docker build . $BUILD_ARGS -t "$DOCKER_TARGET:$VERSION"
     - echo "$DOCKER_PASSWORD" | docker login "$DOCKER_REGISTRY" --username "$DOCKER_USER" --password-stdin
     - retry docker push --quiet "$DOCKER_TARGET:$VERSION"
+    # See build-dev for why the tag ref is passed directly rather than a
+    # digest resolved via `docker inspect`.
+    - cosign_sign "$DOCKER_TARGET:$VERSION"
     - |
       if [ "$LATEST" == "true" ]; then
         docker tag "$DOCKER_TARGET:$VERSION" "$DOCKER_TARGET:latest"

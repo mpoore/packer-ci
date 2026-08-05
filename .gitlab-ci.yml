@@ -46,14 +46,14 @@ before_script:
       done
     }
   # Signs an image digest with cosign. Keyless (Sigstore OIDC, via the
-  # SIGSTORE_ID_TOKEN id_token) by default; set $COSIGN_KEY (and
-  # $COSIGN_PASSWORD if it's encrypted) as a protected CI/CD variable to sign
-  # with a static key instead. The public Rekor transparency log is used
-  # unless $COSIGN_TLOG_UPLOAD is set to "false".
+  # SIGSTORE_ID_TOKEN id_token) by default; set $COSIGN_KEY as a protected,
+  # File-type CI/CD variable (and $COSIGN_PASSWORD if the key is encrypted)
+  # to sign with a static key instead. The public Rekor transparency log is
+  # used unless $COSIGN_TLOG_UPLOAD is set to "false".
   - |
     cosign_sign() {
       args="--yes"
-      [ -n "$COSIGN_KEY" ] && args="$args --key env://COSIGN_KEY"
+      [ -n "$COSIGN_KEY" ] && args="$args --key $COSIGN_KEY"
       [ "$COSIGN_TLOG_UPLOAD" = "false" ] && args="$args --tlog-upload=false"
       cosign sign $args "$1"
     }

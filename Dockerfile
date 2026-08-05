@@ -1,6 +1,9 @@
+# LOCALREGISTRY is an optional prefix (include the trailing slash, e.g.
+# "myregistry.example.com/dockerhub/") pointing at a cached/mirrored copy of
+# the base image, so the build doesn't have to pull alpine from Docker Hub.
 ARG LOCALREGISTRY
 
-FROM alpine:latest AS base
+FROM ${LOCALREGISTRY}alpine:latest AS base
 
 ARG VERSION
 ARG TARGETOS

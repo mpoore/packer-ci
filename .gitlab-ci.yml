@@ -13,10 +13,14 @@ variables:
 stages:
   - build
 
+# RUNNER_IMAGE_MIRROR is an optional prefix (include the trailing slash, e.g.
+# "myregistry.example.com/dockerhub/") pointing at a pull-through cache for
+# the docker:latest/docker:dind images the job itself runs on. Leave unset to
+# pull them from Docker Hub as normal.
 default:
-  image: docker:latest
+  image: ${RUNNER_IMAGE_MIRROR}docker:latest
   services:
-    - name: docker:dind
+    - name: ${RUNNER_IMAGE_MIRROR}docker:dind
 
 before_script:
   - apk add -q git jq
@@ -98,72 +102,66 @@ build-mr:
     - docker build . $BUILD_ARGS -t packer-ci:$VERSION
   artifacts: *artifacts
 
-# dev branch: push to the local Harbor instance.
-build-dev:
+# Push jobs: build and push to the registry configured for this branch's
+# environment scope. REGISTRY, REGISTRY_TARGET, REGISTRY_USER,
+# REGISTRY_PASSWORD and TAG_SUFFIX are CI/CD variables scoped per environment
+# (Settings > CI/CD > Variables > Environment scope: "dev" / "main"), so the
+# same job template drives every branch - only the environment name changes
+# which values apply. REGISTRY_CA_CERT is also environment-scoped and
+# optional: set it (as a File-type variable) only for a registry using a
+# private/internal CA; leave it unset for a publicly trusted registry and the
+# CA-trust step below is skipped entirely.
+.build-push: &build-push
   stage: build
-  rules:
-    - if: $CI_COMMIT_BRANCH == "dev"
   id_tokens:
     SIGSTORE_ID_TOKEN:
       aud: sigstore
   script:
     - *prepare
     - *cosign_install
-    # Trust Harbor's CA for `docker login`/`docker push`, which the dind daemon
-    # handles directly. $HARBOR_CA_CERT is a File-type CI/CD variable, so it's a
-    # path in this job's own filesystem; -e streams its content into the dind
-    # daemon's certs.d dir (a plain -v bind mount would resolve against the
-    # daemon's filesystem, not ours).
-    - docker run --rm -e CACERT="$(cat "$HARBOR_CA_CERT")" -v /etc/docker/certs.d:/certs.d alpine sh -c "mkdir -p /certs.d/$HARBOR_REGISTRY && echo \"\$CACERT\" > /certs.d/$HARBOR_REGISTRY/ca.crt"
-    # cosign talks to the registry directly from this job container rather
-    # than through the dind daemon, so it needs the CA trusted here too.
-    - cat "$HARBOR_CA_CERT" >> /etc/ssl/certs/ca-certificates.crt
+    - |
+      if [ -n "$REGISTRY_CA_CERT" ]; then
+        # Trust the registry's CA for `docker login`/`docker push`, which the
+        # dind daemon handles directly. $REGISTRY_CA_CERT is a File-type
+        # CI/CD variable, so it's a path in this job's own filesystem; -e
+        # streams its content into the dind daemon's certs.d dir (a plain -v
+        # bind mount would resolve against the daemon's filesystem, not ours).
+        docker run --rm -e CACERT="$(cat "$REGISTRY_CA_CERT")" -v /etc/docker/certs.d:/certs.d alpine sh -c "mkdir -p /certs.d/$REGISTRY && echo \"\$CACERT\" > /certs.d/$REGISTRY/ca.crt"
+        # cosign talks to the registry directly from this job container rather
+        # than through the dind daemon, so it needs the CA trusted here too.
+        cat "$REGISTRY_CA_CERT" >> /etc/ssl/certs/ca-certificates.crt
+      fi
     # Build doesn't need registry auth at all (only pulls public alpine, plus
     # curl downloads in the Dockerfile), so it runs before login. Login runs
     # immediately before push rather than before the (20-60s+) build, to avoid
     # leaving a pooled connection idle long enough for the load balancer to
     # drop it before push reuses it - the suspected cause of the "timeout
     # awaiting response headers" failures on the initiate-upload request.
-    - docker build . $BUILD_ARGS -t "$HARBOR_TARGET:$VERSION-dev"
-    - echo "$HARBOR_PASSWORD" | docker login "$HARBOR_REGISTRY" --username "$HARBOR_USER" --password-stdin
-    - retry docker push --quiet "$HARBOR_TARGET:$VERSION-dev"
+    - docker build . $BUILD_ARGS -t "$REGISTRY_TARGET:$VERSION$TAG_SUFFIX"
+    - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY" --username "$REGISTRY_USER" --password-stdin
+    - retry docker push --quiet "$REGISTRY_TARGET:$VERSION$TAG_SUFFIX"
     # Sign the tag ref itself rather than a digest resolved via `docker
     # inspect`: buildx's default provenance attestation makes the pushed
     # image a manifest index, and the local daemon's RepoDigests can reflect
     # the inner platform manifest rather than the index digest the tag
     # actually resolves to in the registry. Passing the tag lets cosign
     # resolve it against the registry directly, which is authoritative.
-    - cosign_sign "$HARBOR_TARGET:$VERSION-dev"
+    - cosign_sign "$REGISTRY_TARGET:$VERSION$TAG_SUFFIX"
     - |
       if [ "$LATEST" == "true" ]; then
-        docker tag "$HARBOR_TARGET:$VERSION-dev" "$HARBOR_TARGET:latest-dev"
-        retry docker push --quiet "$HARBOR_TARGET:latest-dev"
+        docker tag "$REGISTRY_TARGET:$VERSION$TAG_SUFFIX" "$REGISTRY_TARGET:latest$TAG_SUFFIX"
+        retry docker push --quiet "$REGISTRY_TARGET:latest$TAG_SUFFIX"
       fi
   artifacts: *artifacts
 
-# main branch: push to the public Docker registry.
+build-dev:
+  <<: *build-push
+  rules:
+    - if: $CI_COMMIT_BRANCH == "dev"
+  environment: dev
+
 build-main:
-  stage: build
+  <<: *build-push
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
-  id_tokens:
-    SIGSTORE_ID_TOKEN:
-      aud: sigstore
-  script:
-    - *prepare
-    - *cosign_install
-    # Build before login, and login immediately before push - see build-dev for
-    # why (avoids an idle pooled connection getting dropped by the load
-    # balancer between login and push).
-    - docker build . $BUILD_ARGS -t "$DOCKER_TARGET:$VERSION"
-    - echo "$DOCKER_PASSWORD" | docker login "$DOCKER_REGISTRY" --username "$DOCKER_USER" --password-stdin
-    - retry docker push --quiet "$DOCKER_TARGET:$VERSION"
-    # See build-dev for why the tag ref is passed directly rather than a
-    # digest resolved via `docker inspect`.
-    - cosign_sign "$DOCKER_TARGET:$VERSION"
-    - |
-      if [ "$LATEST" == "true" ]; then
-        docker tag "$DOCKER_TARGET:$VERSION" "$DOCKER_TARGET:latest"
-        retry docker push --quiet "$DOCKER_TARGET:latest"
-      fi
-  artifacts: *artifacts
+  environment: main

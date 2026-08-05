@@ -79,6 +79,20 @@ before_script:
     - PLUGINS
     - VERSION
 
+# Trusts a CA for LOCALREGISTRY (the Dockerfile base image mirror) into the
+# dind daemon's cert store, so `docker build` can pull through it. Uses
+# LOCALREGISTRY_CA_CERT if set; otherwise falls back to reusing
+# REGISTRY_CA_CERT, since the mirror is often the same internal registry a
+# branch already pushes to. Both are optional File-type CI/CD variables - if
+# neither is set, or LOCALREGISTRY itself is unset, this is a no-op.
+.localregistry_ca_trust: &localregistry_ca_trust
+  - |
+    LOCALREGISTRY_CA_CERT="${LOCALREGISTRY_CA_CERT:-$REGISTRY_CA_CERT}"
+    if [ -n "$LOCALREGISTRY" ] && [ -n "$LOCALREGISTRY_CA_CERT" ]; then
+      LOCALREGISTRY_HOST="${LOCALREGISTRY%%/*}"
+      docker run --rm -e CACERT="$(cat "$LOCALREGISTRY_CA_CERT")" -v /etc/docker/certs.d:/certs.d alpine sh -c "mkdir -p /certs.d/$LOCALREGISTRY_HOST && echo \"\$CACERT\" > /certs.d/$LOCALREGISTRY_HOST/ca.crt"
+    fi
+
 # Installs the cosign CLI (always the latest release) into the job container.
 .cosign_install: &cosign_install
   - |
@@ -99,6 +113,7 @@ build-mr:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
     - *prepare
+    - *localregistry_ca_trust
     - docker build . $BUILD_ARGS -t packer-ci:$VERSION
   artifacts: *artifacts
 
@@ -118,6 +133,7 @@ build-mr:
       aud: sigstore
   script:
     - *prepare
+    - *localregistry_ca_trust
     - *cosign_install
     - |
       if [ -n "$REGISTRY_CA_CERT" ]; then

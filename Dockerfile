@@ -18,6 +18,7 @@ LABEL org.opencontainers.image.vendor="mpoore.io"
 LABEL org.opencontainers.image.licenses="Apache-2.0 AND BSL-1.1 AND MPL-2.0"
 LABEL org.opencontainers.image.title="Packer Image Builder"
 LABEL org.opencontainers.image.description="HashiCorp Packer packaged with some plugins, by mpoore.io."
+LABEL io.mpoore.packer-ci.packer.version="$VERSION"
 
 # Update packages and install new ones
 RUN <<EOF

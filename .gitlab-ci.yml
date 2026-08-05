@@ -62,7 +62,7 @@ before_script:
   - export LATEST=$(jq -r '.latest' VERSION)
   - export VERSION=$(jq -r '.version' VERSION)
   - export BUILDDATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-  - jq -r '.plugins[] | "LABEL io.mpoore.packer-ci.plugin.\(.name)=\"\(.version)\""' PLUGINS >> Dockerfile
+  - jq -r '.plugins[] | "LABEL io.mpoore.packer-ci.plugin.\(.name | sub("^packer-plugin-"; ""))=\"\(.version)\""' PLUGINS >> Dockerfile
   - echo "Building packer-ci image version $VERSION"
   # --provenance=false skips buildx's default build-provenance attestation,
   # so the pushed image is a plain single manifest instead of a manifest

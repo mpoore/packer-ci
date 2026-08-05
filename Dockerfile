@@ -65,4 +65,4 @@ FROM base
 COPY --from=packer /usr/local/bin /usr/local/bin/
 COPY --from=packer /root/.config/packer/plugins /root/.config/packer/plugins/
 
-# Append labels for plugins
+# Append labels for plugins - leave a blank line below!

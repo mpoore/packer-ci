@@ -50,7 +50,7 @@ RUN set -e; \
     shortname=$(echo $name | sed 's/^packer-plugin-//'); \
     hostnamespace=$(echo $source | sed -e 's#https://##' -e "s#/${name}\$##"); \
     echo "Fetching ${name} ${version} for ${TARGETOS}/${TARGETARCH}..."; \
-    curl -fL --connect-timeout 30 --max-time 120 --retry 5 --retry-delay 5 -o ${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip ${source}/releases/download/${version}/${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip; \
+    curl -fL --connect-timeout 15 --max-time 120 --retry 5 --retry-delay 5 -o ${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip ${source}/releases/download/${version}/${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip; \
     unzip -o ${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH}.zip -d /tmp/plugin-extract; \
     packer plugins install --path /tmp/plugin-extract/${name}_${version}_x5.0_${TARGETOS}_${TARGETARCH} ${hostnamespace}/${shortname}; \
     done; \

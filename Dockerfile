@@ -26,7 +26,7 @@ LABEL io.mpoore.packer-ci.packer.version="$VERSION"
 # Update packages and install new ones
 RUN <<EOF
 apk update -q
-apk add -q --no-cache unzip git curl tar bind-tools coreutils xorriso jq openssl ca-certificates
+apk add -q --no-cache unzip git curl tar bind-tools coreutils xorriso jq openssl ca-certificates bash
 update-ca-certificates
 EOF
 

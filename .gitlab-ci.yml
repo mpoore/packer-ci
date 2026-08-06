@@ -29,7 +29,7 @@ before_script:
     for i in $(seq 1 30); do
       docker info >/dev/null 2>&1 && break
       echo "Waiting for Docker daemon..."
-      sleep 1
+      sleep 5
     done
   - docker info
   # Retry wrapper for flaky network operations (e.g. registry pushes), which

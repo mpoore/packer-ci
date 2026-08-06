@@ -18,9 +18,9 @@ stages:
 # the docker:latest/docker:dind images the job itself runs on. Leave unset to
 # pull them from Docker Hub as normal.
 default:
-  image: docker:latest
+  image: ${RUNNER_IMAGE_MIRROR}docker:latest
   services:
-    - name: docker:dind
+    - name: ${RUNNER_IMAGE_MIRROR}docker:dind
 
 before_script:
   - update-ca-certificates

@@ -18,9 +18,9 @@ stages:
 # the docker:latest/docker:dind images the job itself runs on. Leave unset to
 # pull them from Docker Hub as normal.
 default:
-  image: ${RUNNER_IMAGE_MIRROR}docker:latest
+  image: docker:latest
   services:
-    - name: ${RUNNER_IMAGE_MIRROR}docker:dind
+    - name: docker:dind
 
 before_script:
   - apk add -q git jq

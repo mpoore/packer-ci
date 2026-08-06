@@ -23,6 +23,7 @@ default:
     - name: docker:dind
 
 before_script:
+  - update-ca-certificates
   - apk add -q git jq
   # Wait for the dind service to be ready before using the Docker client against it
   - |
